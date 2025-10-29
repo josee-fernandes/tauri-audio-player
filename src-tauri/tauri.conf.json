@@ -14,11 +14,20 @@
       {
         "title": "audio-player",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "center": true,
+        "resizable": true,
+        "decorations": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; media-src 'self' asset: https://asset.localhost;",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**"
+        ]
+      }
     }
   },
   "bundle": {
