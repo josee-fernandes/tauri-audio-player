@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:win": "./run-win-dev.sh",
+    "compile:win": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc",
+    "compile:win:debug": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --debug",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
