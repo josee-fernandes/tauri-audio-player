@@ -24,7 +24,7 @@ export const TitleBar: React.FC = () => {
 	}
 
 	return (
-		<div className="py-2 px-2 select-none grid grid-cols-[auto_max-content] text-zinc-950 dark:text-zinc-50 z-[999999999]">
+		<div className="py-2 px-2 select-none grid grid-cols-[auto_max-content] text-zinc-950 dark:text-zinc-50 z-999">
 			<div data-tauri-drag-region />
 			<div className="flex gap-2">
 				<button

@@ -3,7 +3,18 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { readDir } from '@tauri-apps/plugin-fs'
 import clsx from 'clsx'
 import Lenis from 'lenis'
-import { FolderOpen, Pause, Play, Repeat, Repeat1, SkipBack, SkipForward, SquareStop, Volume2 } from 'lucide-react'
+import {
+	FolderOpen,
+	Music,
+	Pause,
+	Play,
+	Repeat,
+	Repeat1,
+	SkipBack,
+	SkipForward,
+	SquareStop,
+	Volume2,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
@@ -108,6 +119,9 @@ export const AudioPlayer: React.FC = () => {
 
 	const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const newVolume = parseFloat(e.target.value)
+
+		console.log({ v: e.target.value })
+		console.log({ newVolume })
 
 		setVolume(newVolume)
 
@@ -217,12 +231,14 @@ export const AudioPlayer: React.FC = () => {
 					<button
 						type="button"
 						onClick={selectFolder}
-						className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all"
+						className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all cursor-pointer"
 					>
 						<FolderOpen className="size-4 text-zinc-50 fill-zinc-50" />
 						Selecionar Pasta
 					</button>
-					{selectedFolder && <p className="mt-2 text-sm text-zinc-500">Pasta: {selectedFolder.split('/').pop()}</p>}
+					{selectedFolder && (
+						<p className="mt-2 text-sm text-zinc-500 font-bold">Pasta atual: {selectedFolder.split('/').pop()}</p>
+					)}
 				</div>
 				<div>
 					<div className="flex flex-col gap-2 w-20">
@@ -239,6 +255,7 @@ export const AudioPlayer: React.FC = () => {
 			<div ref={listWrapperRef} className="relative flex-1 p-4 overflow-hidden">
 				{audioFiles.length === 0 ? (
 					<div className="text-center text-zinc-500 mt-8">
+						<Music className="size-10 text-zinc-500 mx-auto mb-4" />
 						<p>Nenhuma música encontrada</p>
 						<p className="text-sm">Selecione uma pasta para começar</p>
 					</div>
@@ -250,8 +267,10 @@ export const AudioPlayer: React.FC = () => {
 								onDoubleClick={() => playTrack(file)}
 								type="button"
 								className={clsx(
-									'w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-zinc-900 hover:bg-zinc-900/50',
-									{ 'bg-indigo-600! border-indigo-600! text-zinc-50!': currentTrack?.path === file.path },
+									'relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-zinc-900 hover:bg-zinc-900/50 ',
+									{
+										'bg-indigo-600! border-indigo-600! text-zinc-50!': currentTrack?.path === file.path,
+									},
 								)}
 							>
 								<div className="flex items-center gap-3">
@@ -293,11 +312,9 @@ export const AudioPlayer: React.FC = () => {
 						</div>
 						<div className="relative">
 							<div
-								className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all"
+								className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 animate-gradient-cycle rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:absolute after:-top-0.5 after:-right-1.5 after:bg-zinc-50 after:rounded-full gradient-cycle"
 								style={{ width: `${(currentTime / duration) * 100}%` }}
-							>
-								<div className="absolute -right-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full transition-all" />
-							</div>
+							/>
 							<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
 
 							<input
@@ -316,7 +333,7 @@ export const AudioPlayer: React.FC = () => {
 						<button
 							type="button"
 							onClick={previousTrack}
-							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors"
+							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
 						>
 							<SkipBack className="size-4 text-zinc-50 fill-zinc-50" />
 						</button>
@@ -324,7 +341,7 @@ export const AudioPlayer: React.FC = () => {
 						<button
 							type="button"
 							onClick={togglePlayPause}
-							className="p-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+							className="p-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
 						>
 							{isPlaying ? (
 								<Pause className="size-4 text-zinc-50 fill-zinc-50" />
@@ -333,11 +350,19 @@ export const AudioPlayer: React.FC = () => {
 							)}
 						</button>
 
-						<button type="button" onClick={stopTrack} className="p-2 hover:bg-zinc-900 rounded-lg transition-colors">
+						<button
+							type="button"
+							onClick={stopTrack}
+							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
+						>
 							<SquareStop className="size-4 text-zinc-50 fill-zinc-50" />
 						</button>
 
-						<button type="button" onClick={nextTrack} className="p-2 hover:bg-zinc-900 rounded-lg transition-colors">
+						<button
+							type="button"
+							onClick={nextTrack}
+							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
+						>
 							<SkipForward className="size-4 text-zinc-50 fill-zinc-50" />
 						</button>
 					</div>
@@ -348,9 +373,10 @@ export const AudioPlayer: React.FC = () => {
 						<button
 							type="button"
 							onClick={toggleRepeat}
-							className={`p-2 rounded-lg transition-colors ${
-								repeatMode !== 'none' ? 'bg-indigo-600 text-white' : 'hover:bg-zinc-900'
-							}`}
+							className={clsx(
+								'p-2 rounded-lg transition-colors cursor-pointer',
+								repeatMode !== 'none' ? 'bg-indigo-600 text-white' : 'hover:bg-zinc-900',
+							)}
 						>
 							{repeatMode === 'one' ? (
 								<Repeat1 className="size-4 text-zinc-50" />
@@ -361,24 +387,18 @@ export const AudioPlayer: React.FC = () => {
 
 						{/* Volume Control */}
 						<div className="flex items-center gap-2">
-							<Volume2 className="size-4 text-zinc-50 fill-zinc-50" />
-							<div className="relative w-24">
+							<Volume2 className="size-4 text-zinc-50" />
+							<div className="relative w-48">
 								<div
-									className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all"
+									className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-zinc-50 after:rounded-full"
 									style={{ width: `${Math.round(volume * 100)}%` }}
-								></div>
-								<div
-									className="absolute left-0 top-1/2 w-4 h-2 bg-white rounded-full transition-all z-10"
-									style={{
-										transform: `translate(${(Math.round(volume * 100) * (6 * 16)) / 100 > ((6 * 16 - 16) / 2) ? (Math.round(volume * 100) * (6 * 16)) / 100 - 16 : (Math.round(volume * 100) * (6 * 16)) / 100}px, -50%)`,
-									}}
 								/>
 								<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
 								<input
 									type="range"
 									min={0}
 									max={1}
-									step={0.01}
+									step={0.001}
 									value={volume}
 									onChange={handleVolumeChange}
 									className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
