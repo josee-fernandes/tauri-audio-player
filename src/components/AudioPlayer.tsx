@@ -1,11 +1,12 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { audioDir } from '@tauri-apps/api/path'
-import { open } from '@tauri-apps/plugin-dialog'
 import { readDir } from '@tauri-apps/plugin-fs'
 import clsx from 'clsx'
 import Lenis from 'lenis'
 import {
 	FolderOpen,
+	LayoutGrid,
+	LayoutList,
 	Music,
 	Pause,
 	Play,
@@ -16,11 +17,10 @@ import {
 	SquareStop,
 	Volume2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
 
-// const DEFAULT_FOLDER = 'C:\\Users\\%USERNAME%\\Music'
+import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
 
 export const AudioPlayer: React.FC = () => {
 	const [defaultAudioDir, setDefaultAudioDir] = useState<string>('')
@@ -34,29 +34,13 @@ export const AudioPlayer: React.FC = () => {
 	const [repeatMode, setRepeatMode] = useState<'none' | 'one' | 'all'>('none')
 	const [selectedFolder, setSelectedFolder] = useState<string>('')
 	const [scrollPercentage, setScrollPercentage] = useState(0)
+	const [view, setView] = useState<'list' | 'grid'>('list')
 
 	const audioRef = useRef<HTMLAudioElement>(null)
 
 	const listWrapperRef = useRef<HTMLDivElement | null>(null)
 	const listContentRef = useRef<HTMLDivElement | null>(null)
 	const lenisRef = useRef<Lenis | null>(null)
-
-	const selectFolder = async () => {
-		try {
-			const selected = await open({
-				directory: true,
-				multiple: false,
-				title: 'Selecionar pasta de música',
-			})
-
-			if (selected) {
-				setSelectedFolder(selected as string)
-				await loadAudioFiles(selected as string)
-			}
-		} catch (error) {
-			toast.error('Select folder error', { description: error as string })
-		}
-	}
 
 	const loadAudioFiles = useCallback(async (folderPath: string) => {
 		try {
@@ -81,9 +65,8 @@ export const AudioPlayer: React.FC = () => {
 
 	const handleParentDirectory = () => {
 		try {
-			console.log({ selectedFolder })
 			const parentPath = selectedFolder.split('\\').slice(0, -1).join('\\')
-			console.log({ parentPath })
+
 			if (parentPath) {
 				handleOpenDirectory(parentPath)
 			}
@@ -267,18 +250,36 @@ export const AudioPlayer: React.FC = () => {
 		<div className="flex flex-col h-full">
 			{/* Header */}
 			<header className="p-4 border-b border-zinc-900 flex justify-between items-end">
-				<div>
-					<button
-						type="button"
-						onClick={selectFolder}
-						className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all cursor-pointer"
-					>
-						<FolderOpen className="size-4 text-zinc-50 fill-zinc-50" />
-						Selecionar Pasta
-					</button>
+				<div className="flex flex-col justify-center gap-2">
 					{selectedFolder && (
 						<p className="mt-2 text-sm text-zinc-500 font-bold">Pasta atual: {selectedFolder.split('/').pop()}</p>
 					)}
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={() => setView('list')}
+							className={clsx(
+								'p-2 bg-transparent border-2 border-zinc-900 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer',
+								{
+									'bg-indigo-600! hover:bg-indigo-700! border-indigo-600!': view === 'list',
+								},
+							)}
+						>
+							<LayoutList className="size-4 text-zinc-50" />
+						</button>
+						<button
+							type="button"
+							onClick={() => setView('grid')}
+							className={clsx(
+								'p-2 bg-transparent border-2 border-zinc-900 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer',
+								{
+									'bg-indigo-600! hover:bg-indigo-700! border-indigo-600!': view === 'grid',
+								},
+							)}
+						>
+							<LayoutGrid className="size-4 text-zinc-50" />
+						</button>
+					</div>
 				</div>
 				<div>
 					<div className="flex flex-col gap-2 w-20">
@@ -300,12 +301,19 @@ export const AudioPlayer: React.FC = () => {
 						<p className="text-sm">Selecione uma pasta para começar</p>
 					</div>
 				)}
-				<div ref={listContentRef} className="space-y-1">
+				<div
+					ref={listContentRef}
+					className={clsx({
+						'flex flex-col gap-1': view === 'list',
+						'grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-1':
+							view === 'grid',
+					})}
+				>
 					{selectedFolder !== defaultAudioDir && (
 						<button
 							onDoubleClick={handleParentDirectory}
 							type="button"
-							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
+							className="relative w-full text-left p-2 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
 						>
 							<div className="flex items-center gap-3">
 								<span className="text-sm text-zinc-50 w-8 font-bold">
@@ -409,7 +417,7 @@ export const AudioPlayer: React.FC = () => {
 						<button
 							type="button"
 							onClick={togglePlayPause}
-							className="p-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
+							className="p-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
 						>
 							{isPlaying ? (
 								<Pause className="size-4 text-zinc-50 fill-zinc-50" />
