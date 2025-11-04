@@ -7,7 +7,6 @@ import {
 	FolderOpen,
 	LayoutGrid,
 	LayoutList,
-	Music,
 	Pause,
 	Play,
 	Repeat,
@@ -294,13 +293,6 @@ export const AudioPlayer: React.FC = () => {
 
 			{/* File List */}
 			<div ref={listWrapperRef} className="relative flex-1 p-4 overflow-hidden">
-				{audioFiles.length === 0 && !selectedFolder && (
-					<div className="text-center text-zinc-500 mt-8">
-						<Music className="size-10 text-zinc-500 mx-auto mb-4" />
-						<p>Nenhuma música encontrada</p>
-						<p className="text-sm">Selecione uma pasta para começar</p>
-					</div>
-				)}
 				<div
 					ref={listContentRef}
 					className={clsx({
@@ -313,7 +305,7 @@ export const AudioPlayer: React.FC = () => {
 						<button
 							onDoubleClick={handleParentDirectory}
 							type="button"
-							className="relative w-full text-left p-2 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
+							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
 						>
 							<div className="flex items-center gap-3">
 								<span className="text-sm text-zinc-50 w-8 font-bold">
