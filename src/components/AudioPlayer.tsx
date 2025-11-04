@@ -1,4 +1,5 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { audioDir } from '@tauri-apps/api/path'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readDir } from '@tauri-apps/plugin-fs'
 import clsx from 'clsx'
@@ -15,11 +16,15 @@ import {
 	SquareStop,
 	Volume2,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
 
+// const DEFAULT_FOLDER = 'C:\\Users\\%USERNAME%\\Music'
+
 export const AudioPlayer: React.FC = () => {
+	const [defaultAudioDir, setDefaultAudioDir] = useState<string>('')
+	const [directories, setDirectories] = useState<Directory[]>([])
 	const [audioFiles, setAudioFiles] = useState<AudioFile[]>([])
 	const [currentTrack, setCurrentTrack] = useState<AudioFile | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -53,9 +58,12 @@ export const AudioPlayer: React.FC = () => {
 		}
 	}
 
-	const loadAudioFiles = async (folderPath: string) => {
+	const loadAudioFiles = useCallback(async (folderPath: string) => {
 		try {
 			const entries = await readDir(folderPath)
+			const directoriesWithPath = entries
+				.filter((entry) => entry.isDirectory)
+				.map((entry) => ({ ...entry, path: `${folderPath}\\${entry.name}` }))
 			const audioFiles = entries
 				.filter((entry) => entry.isFile && AUDIO_EXTENSIONS.some((ext) => entry.name?.toLowerCase().endsWith(ext)))
 				.map((entry) => ({
@@ -63,11 +71,38 @@ export const AudioPlayer: React.FC = () => {
 					path: `${folderPath}\\${entry.name}`,
 				}))
 
+			setDirectories(directoriesWithPath)
 			setAudioFiles(audioFiles)
 		} catch (error) {
 			toast.error('Load audio files error', { description: error as string })
+			throw error
+		}
+	}, [])
+
+	const handleParentDirectory = () => {
+		try {
+			console.log({ selectedFolder })
+			const parentPath = selectedFolder.split('\\').slice(0, -1).join('\\')
+			console.log({ parentPath })
+			if (parentPath) {
+				handleOpenDirectory(parentPath)
+			}
+		} catch (error) {
+			toast.error('Parent directory error', { description: error as string })
 		}
 	}
+
+	const handleOpenDirectory = useCallback(
+		async (directoryPath: string) => {
+			try {
+				await loadAudioFiles(directoryPath)
+				setSelectedFolder(directoryPath)
+			} catch (error) {
+				toast.error('Open directory error', { description: error as string })
+			}
+		},
+		[loadAudioFiles],
+	)
 
 	const playTrack = useCallback(
 		(track: AudioFile) => {
@@ -119,9 +154,6 @@ export const AudioPlayer: React.FC = () => {
 
 	const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const newVolume = parseFloat(e.target.value)
-
-		console.log({ v: e.target.value })
-		console.log({ newVolume })
 
 		setVolume(newVolume)
 
@@ -223,6 +255,14 @@ export const AudioPlayer: React.FC = () => {
 		}
 	}, [selectedFolder, audioFiles.length])
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: should only run once
+	useEffect(() => {
+		audioDir().then((response) => {
+			setDefaultAudioDir(response)
+			handleOpenDirectory(response)
+		})
+	}, [])
+
 	return (
 		<div className="flex flex-col h-full">
 			{/* Header */}
@@ -253,52 +293,80 @@ export const AudioPlayer: React.FC = () => {
 
 			{/* File List */}
 			<div ref={listWrapperRef} className="relative flex-1 p-4 overflow-hidden">
-				{audioFiles.length === 0 ? (
+				{audioFiles.length === 0 && !selectedFolder && (
 					<div className="text-center text-zinc-500 mt-8">
 						<Music className="size-10 text-zinc-500 mx-auto mb-4" />
 						<p>Nenhuma música encontrada</p>
 						<p className="text-sm">Selecione uma pasta para começar</p>
 					</div>
-				) : (
-					<div ref={listContentRef} className="space-y-1">
-						{audioFiles.map((file, index) => (
-							<button
-								key={file.path}
-								onDoubleClick={() => playTrack(file)}
-								type="button"
-								className={clsx(
-									'relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-zinc-900 hover:bg-zinc-900/50 ',
-									{
-										'bg-indigo-600! border-indigo-600! text-zinc-50!': currentTrack?.path === file.path,
-									},
-								)}
-							>
-								<div className="flex items-center gap-3">
-									<span
-										className={clsx('text-sm text-zinc-500 w-8', {
-											'text-zinc-50! font-bold': currentTrack?.path === file.path,
-										})}
-									>
-										{index + 1}
-									</span>
-									<span
-										className={clsx('flex-1 truncate', {
-											'text-zinc-50! font-bold': currentTrack?.path === file.path,
-										})}
-									>
-										{file.name.replace(/\.[^/.]+$/, '')}
-									</span>
-									{currentTrack?.path === file.path && isPlaying && (
-										<div className="relative">
-											<div className="w-2 h-2 bg-white rounded-full animate-ping " />
-											<div className="absolute inset-0 w-2 h-2 bg-white rounded-full animate-pulse" />
-										</div>
-									)}
-								</div>
-							</button>
-						))}
-					</div>
 				)}
+				<div ref={listContentRef} className="space-y-1">
+					{selectedFolder !== defaultAudioDir && (
+						<button
+							onDoubleClick={handleParentDirectory}
+							type="button"
+							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
+						>
+							<div className="flex items-center gap-3">
+								<span className="text-sm text-zinc-50 w-8 font-bold">
+									<FolderOpen className="size-4 text-zinc-50" />
+								</span>
+								<span className="flex-1 truncate text-zinc-50">..</span>
+							</div>
+						</button>
+					)}
+					{directories?.map((directory) => (
+						<button
+							key={directory.path}
+							onDoubleClick={() => handleOpenDirectory(directory.path)}
+							type="button"
+							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
+						>
+							<div className="flex items-center gap-3">
+								<span className="text-sm text-zinc-50 w-8 font-bold">
+									<FolderOpen className="size-4 text-zinc-50" />
+								</span>
+								<span className="flex-1 truncate text-zinc-50">{directory.name}</span>
+							</div>
+						</button>
+					))}
+					{audioFiles?.map((file, index) => (
+						<button
+							key={file.path}
+							onDoubleClick={() => playTrack(file)}
+							type="button"
+							className={clsx(
+								'relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-zinc-900 hover:bg-zinc-900/50 ',
+								{
+									'bg-indigo-600! border-indigo-600! text-zinc-50!': currentTrack?.path === file.path,
+								},
+							)}
+						>
+							<div className="flex items-center gap-3">
+								<span
+									className={clsx('text-sm text-zinc-500 w-8', {
+										'text-zinc-50! font-bold': currentTrack?.path === file.path,
+									})}
+								>
+									{index + 1}
+								</span>
+								<span
+									className={clsx('flex-1 truncate', {
+										'text-zinc-50! font-bold': currentTrack?.path === file.path,
+									})}
+								>
+									{file.name.replace(/\.[^/.]+$/, '')}
+								</span>
+								{currentTrack?.path === file.path && isPlaying && (
+									<div className="relative">
+										<div className="w-2 h-2 bg-white rounded-full animate-ping " />
+										<div className="absolute inset-0 w-2 h-2 bg-white rounded-full animate-pulse" />
+									</div>
+								)}
+							</div>
+						</button>
+					))}
+				</div>
 			</div>
 
 			{/* Controls */}
