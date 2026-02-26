@@ -1,6 +1,6 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { audioDir } from '@tauri-apps/api/path'
-import { readDir } from '@tauri-apps/plugin-fs'
+import { readDir, readFile } from '@tauri-apps/plugin-fs'
 import clsx from 'clsx'
 import Lenis from 'lenis'
 import {
@@ -13,13 +13,32 @@ import {
 	Repeat1,
 	SkipBack,
 	SkipForward,
+	SlidersHorizontal,
 	SquareStop,
 	Volume2,
+	X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
+
+const EQ_STORAGE_KEY = 'audio-player-eq-settings'
+
+type EqBand = {
+	frequency: number
+	gain: number
+	q: number
+	type: BiquadFilterType
+}
+
+const defaultEqBands: EqBand[] = [
+	{ frequency: 60, gain: 0, q: 1, type: 'lowshelf' },
+	{ frequency: 230, gain: 0, q: 1, type: 'peaking' },
+	{ frequency: 910, gain: 0, q: 1, type: 'peaking' },
+	{ frequency: 3600, gain: 0, q: 1, type: 'peaking' },
+	{ frequency: 14000, gain: 0, q: 1, type: 'highshelf' },
+]
 
 export const AudioPlayer: React.FC = () => {
 	const [defaultAudioDir, setDefaultAudioDir] = useState<string>('')
@@ -35,11 +54,36 @@ export const AudioPlayer: React.FC = () => {
 	const [scrollPercentage, setScrollPercentage] = useState(0)
 	const [view, setView] = useState<'list' | 'grid'>('list')
 
+	const [eqBands, setEqBands] = useState<EqBand[]>(() => {
+		if (typeof window === 'undefined') return defaultEqBands
+		try {
+			const stored = window.localStorage.getItem(EQ_STORAGE_KEY)
+			if (!stored) return defaultEqBands
+			const parsed = JSON.parse(stored) as EqBand[]
+			return parsed.length ? parsed : defaultEqBands
+		} catch {
+			return defaultEqBands
+		}
+	})
+
+	const [isEqOpen, setIsEqOpen] = useState(false)
+
 	const audioRef = useRef<HTMLAudioElement>(null)
 
 	const listWrapperRef = useRef<HTMLDivElement | null>(null)
 	const listContentRef = useRef<HTMLDivElement | null>(null)
 	const lenisRef = useRef<Lenis | null>(null)
+
+	const audioContextRef = useRef<AudioContext | null>(null)
+	const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+	const eqFiltersRef = useRef<BiquadFilterNode[]>([])
+	const eqGainRef = useRef<GainNode | null>(null)
+	const bufferSourceRef = useRef<AudioBufferSourceNode | null>(null)
+	const bufferStartTimeRef = useRef(0)
+	const bufferStartOffsetRef = useRef(0)
+	const useBufferModeRef = useRef(false)
+	const eqBufferModeRef = useRef(false)
+	const timeUpdateRef = useRef<number | null>(null)
 
 	const loadAudioFiles = useCallback(async (folderPath: string) => {
 		try {
@@ -86,9 +130,182 @@ export const AudioPlayer: React.FC = () => {
 		[loadAudioFiles],
 	)
 
+	const setupEqGraph = useCallback(() => {
+		const audioElement = audioRef.current
+		if (!audioElement) return
+
+		// Com protocolo de asset do Tauri (asset.localhost), o navegador aplica CORS ao usar
+		// MediaElementAudioSourceNode e o áudio sai em silêncio. Não criar o grafo nesse caso.
+		if (audioElement.src?.includes('asset.localhost')) {
+			return
+		}
+
+		if (!audioContextRef.current) {
+			audioContextRef.current = new AudioContext()
+		}
+
+		const ctx = audioContextRef.current
+
+		if (!sourceRef.current) {
+			sourceRef.current = ctx.createMediaElementSource(audioElement)
+		}
+
+		eqFiltersRef.current.forEach((node) => {
+			node.disconnect()
+		})
+		eqFiltersRef.current = []
+
+		const filters = eqBands.map((band) => {
+			const filter = ctx.createBiquadFilter()
+			filter.type = band.type
+			filter.frequency.value = band.frequency
+			filter.gain.value = band.gain
+			filter.Q.value = band.q
+			return filter
+		})
+
+		if (filters.length > 0) {
+			sourceRef.current.disconnect()
+			sourceRef.current.connect(filters[0])
+
+			for (let i = 0; i < filters.length - 1; i += 1) {
+				filters[i].connect(filters[i + 1])
+			}
+
+			filters[filters.length - 1].connect(ctx.destination)
+		} else {
+			sourceRef.current.disconnect()
+			sourceRef.current.connect(ctx.destination)
+		}
+
+		eqFiltersRef.current = filters
+
+		if (ctx.state === 'suspended') {
+			ctx.resume()
+		}
+	}, [eqBands])
+
+	const nextTrackRef = useRef<(() => void) | null>(null)
+	const repeatModeRef = useRef<'none' | 'one' | 'all'>('none')
+
+	const ensureEqContextAndFiltersForBuffer = useCallback(() => {
+		if (!audioContextRef.current) {
+			audioContextRef.current = new AudioContext()
+		}
+		const ctx = audioContextRef.current
+		if (ctx.state === 'suspended') {
+			ctx.resume()
+		}
+
+		eqFiltersRef.current.forEach((node) => {
+			node.disconnect()
+		})
+		eqFiltersRef.current = []
+		eqGainRef.current?.disconnect()
+
+		const filters = eqBands.map((band) => {
+			const filter = ctx.createBiquadFilter()
+			filter.type = band.type
+			filter.frequency.value = band.frequency
+			filter.gain.value = band.gain
+			filter.Q.value = band.q
+			return filter
+		})
+
+		const gainNode = ctx.createGain()
+		gainNode.gain.value = volume
+		eqGainRef.current = gainNode
+
+		if (filters.length > 0) {
+			for (let i = 0; i < filters.length - 1; i += 1) {
+				filters[i].connect(filters[i + 1])
+			}
+			filters[filters.length - 1].connect(gainNode)
+		}
+		gainNode.connect(ctx.destination)
+		eqFiltersRef.current = filters
+	}, [eqBands, volume])
+
+	const loadAndPlayBuffer = useCallback(
+		async (track: AudioFile, startOffset: number) => {
+			try {
+				const bytes = await readFile(track.path)
+				const arrayBuffer =
+					bytes.byteLength === bytes.buffer.byteLength
+						? bytes.buffer
+						: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+
+				if (!audioContextRef.current) {
+					audioContextRef.current = new AudioContext()
+				}
+				const ctx = audioContextRef.current
+				if (ctx.state === 'suspended') {
+					await ctx.resume()
+				}
+
+				const audioBuffer = await ctx.decodeAudioData(
+					arrayBuffer.slice(0) as ArrayBuffer,
+				)
+				ensureEqContextAndFiltersForBuffer()
+				const filters = eqFiltersRef.current
+				if (filters.length === 0) return
+
+				bufferSourceRef.current?.stop()
+				const source = ctx.createBufferSource()
+				source.buffer = audioBuffer
+				source.connect(filters[0])
+				source.onended = () => {
+					bufferSourceRef.current = null
+					eqBufferModeRef.current = false
+					const mode = repeatModeRef.current
+					if (mode === 'one') {
+						void loadAndPlayBuffer(track, 0)
+					} else if (mode === 'all') {
+						nextTrackRef.current?.()
+					} else {
+						setIsPlaying(false)
+					}
+				}
+				source.start(0, startOffset)
+				bufferSourceRef.current = source
+				bufferStartTimeRef.current = ctx.currentTime
+				bufferStartOffsetRef.current = startOffset
+				setDuration(audioBuffer.duration)
+				setCurrentTime(startOffset)
+				setIsPlaying(true)
+				eqBufferModeRef.current = true
+			} catch (err) {
+				toast.error('Erro ao carregar áudio para o equalizador', { description: String(err) })
+			}
+		},
+		[ensureEqContextAndFiltersForBuffer],
+	)
+
+	const openEq = useCallback(() => {
+		useBufferModeRef.current = true
+		if (currentTrack && isPlaying && audioRef.current && audioRef.current.src?.includes('asset.localhost')) {
+			const offset = audioRef.current.currentTime
+			audioRef.current.pause()
+			setIsPlaying(false)
+			loadAndPlayBuffer(currentTrack, offset)
+		} else if (!sourceRef.current && audioRef.current && !audioRef.current.src?.includes('asset.localhost')) {
+			setupEqGraph()
+			const ctx = audioContextRef.current
+			if (ctx?.state === 'suspended') {
+				ctx.resume()
+			}
+		}
+		setIsEqOpen(true)
+	}, [setupEqGraph, currentTrack, isPlaying, loadAndPlayBuffer])
+
 	const playTrack = useCallback(
 		(track: AudioFile) => {
 			setCurrentTrack(track)
+
+			if (useBufferModeRef.current) {
+				void loadAndPlayBuffer(track, 0)
+				return
+			}
 
 			if (audioRef.current) {
 				try {
@@ -102,10 +319,24 @@ export const AudioPlayer: React.FC = () => {
 				}
 			}
 		},
-		[volume],
+		[volume, loadAndPlayBuffer],
 	)
 
-	const togglePlayPause = () => {
+	const togglePlayPause = useCallback(() => {
+		if (eqBufferModeRef.current && currentTrack) {
+			const ctx = audioContextRef.current
+			const source = bufferSourceRef.current
+			if (isPlaying && source && ctx) {
+				bufferStartOffsetRef.current =
+					bufferStartOffsetRef.current + (ctx.currentTime - bufferStartTimeRef.current)
+				source.stop()
+				bufferSourceRef.current = null
+				setIsPlaying(false)
+			} else if (!isPlaying && currentTrack) {
+				void loadAndPlayBuffer(currentTrack, bufferStartOffsetRef.current)
+			}
+			return
+		}
 		if (audioRef.current) {
 			if (isPlaying) {
 				audioRef.current.pause()
@@ -114,31 +345,51 @@ export const AudioPlayer: React.FC = () => {
 			}
 			setIsPlaying((oldIsPlaying) => !oldIsPlaying)
 		}
-	}
+	}, [isPlaying, currentTrack, loadAndPlayBuffer])
 
-	const stopTrack = () => {
+	const stopTrack = useCallback(() => {
+		if (eqBufferModeRef.current) {
+			bufferSourceRef.current?.stop()
+			bufferSourceRef.current = null
+			eqBufferModeRef.current = false
+			setIsPlaying(false)
+			setCurrentTime(0)
+			return
+		}
 		if (audioRef.current) {
 			audioRef.current.pause()
 			audioRef.current.currentTime = 0
 			setIsPlaying(false)
 			setCurrentTime(0)
 		}
-	}
+	}, [])
 
-	const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const time = parseFloat(e.target.value)
+	const handleSeek = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const time = parseFloat(e.target.value)
 
-		if (audioRef.current) {
-			audioRef.current.currentTime = time
-			setCurrentTime(time)
-		}
-	}
+			if (eqBufferModeRef.current && currentTrack) {
+				bufferStartOffsetRef.current = time
+				bufferSourceRef.current?.stop()
+				void loadAndPlayBuffer(currentTrack, time)
+				return
+			}
+			if (audioRef.current) {
+				audioRef.current.currentTime = time
+				setCurrentTime(time)
+			}
+		},
+		[currentTrack, loadAndPlayBuffer],
+	)
 
 	const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const newVolume = parseFloat(e.target.value)
 
 		setVolume(newVolume)
 
+		if (eqGainRef.current) {
+			eqGainRef.current.gain.value = newVolume
+		}
 		if (audioRef.current) {
 			audioRef.current.volume = newVolume
 		}
@@ -152,6 +403,9 @@ export const AudioPlayer: React.FC = () => {
 			playTrack(audioFiles[nextIndex])
 		}
 	}, [currentTrack, audioFiles, playTrack])
+
+	nextTrackRef.current = nextTrack
+	repeatModeRef.current = repeatMode
 
 	const previousTrack = () => {
 		if (currentTrack && audioFiles.length > 0) {
@@ -189,9 +443,14 @@ export const AudioPlayer: React.FC = () => {
 
 		if (!audio) return
 
-		const handleTimeUpdate = () => setCurrentTime(audio.currentTime)
-		const handleLoadedMetadata = () => setDuration(audio.duration)
+		const handleTimeUpdate = () => {
+			if (!eqBufferModeRef.current) setCurrentTime(audio.currentTime)
+		}
+		const handleLoadedMetadata = () => {
+			if (!eqBufferModeRef.current) setDuration(audio.duration)
+		}
 		const handleEnded = () => {
+			if (eqBufferModeRef.current) return
 			if (repeatMode === 'one') {
 				audio.currentTime = 0
 				audio.play()
@@ -212,6 +471,25 @@ export const AudioPlayer: React.FC = () => {
 			audio.removeEventListener('ended', handleEnded)
 		}
 	}, [repeatMode, nextTrack])
+
+	useEffect(() => {
+		if (!isPlaying) return
+		const tick = () => {
+			if (!eqBufferModeRef.current) return
+			const ctx = audioContextRef.current
+			if (!ctx) return
+			const t = bufferStartOffsetRef.current + (ctx.currentTime - bufferStartTimeRef.current)
+			setCurrentTime(t)
+			timeUpdateRef.current = requestAnimationFrame(tick)
+		}
+		timeUpdateRef.current = requestAnimationFrame(tick)
+		return () => {
+			if (timeUpdateRef.current !== null) {
+				cancelAnimationFrame(timeUpdateRef.current)
+				timeUpdateRef.current = null
+			}
+		}
+	}, [isPlaying])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: needed to destroy and create the lenis instance
 	useEffect(() => {
@@ -243,6 +521,42 @@ export const AudioPlayer: React.FC = () => {
 			setDefaultAudioDir(response)
 			handleOpenDirectory(response)
 		})
+	}, [])
+
+	useEffect(() => {
+		try {
+			window.localStorage.setItem(EQ_STORAGE_KEY, JSON.stringify(eqBands))
+		} catch {
+			// ignora erros de storage
+		}
+	}, [eqBands])
+
+	useEffect(() => {
+		const ctx = audioContextRef.current
+		const filters = eqFiltersRef.current
+		if (!ctx || filters.length === 0) return
+
+		eqBands.forEach((band, index) => {
+			const filter = filters[index]
+			if (!filter) return
+			filter.gain.value = band.gain
+			filter.frequency.value = band.frequency
+			filter.Q.value = band.q
+			filter.type = band.type
+		})
+	}, [eqBands])
+
+	useEffect(() => {
+		return () => {
+			timeUpdateRef.current !== null && cancelAnimationFrame(timeUpdateRef.current)
+			bufferSourceRef.current?.stop()
+			eqFiltersRef.current.forEach((f) => {
+				f.disconnect()
+			})
+			eqGainRef.current?.disconnect()
+			sourceRef.current?.disconnect()
+			audioContextRef.current?.close().catch(() => {})
+		}
 	}, [])
 
 	return (
@@ -453,32 +767,105 @@ export const AudioPlayer: React.FC = () => {
 							)}
 						</button>
 
-						{/* Volume Control */}
-						<div className="flex items-center gap-2">
-							<Volume2 className="size-4 text-zinc-50" />
-							<div className="relative w-48">
-								<div
-									className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-zinc-50 after:rounded-full"
-									style={{ width: `${Math.round(volume * 100)}%` }}
-								/>
-								<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
-								<input
-									type="range"
-									min={0}
-									max={1}
-									step={0.001}
-									value={volume}
-									onChange={handleVolumeChange}
-									className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
-								/>
+						<div className="flex items-center gap-4">
+							{/* EQ Button */}
+							<button
+								type="button"
+								onClick={openEq}
+								className="p-2 rounded-lg transition-colors cursor-pointer hover:bg-zinc-900"
+								title="Equalizador"
+							>
+								<SlidersHorizontal className="size-4 text-zinc-50" />
+							</button>
+
+							{/* Volume Control */}
+							<div className="flex items-center gap-2">
+								<Volume2 className="size-4 text-zinc-50" />
+								<div className="relative w-48">
+									<div
+										className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-zinc-50 after:rounded-full"
+										style={{ width: `${Math.round(volume * 100)}%` }}
+									/>
+									<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
+									<input
+										type="range"
+										min={0}
+										max={1}
+										step={0.001}
+										value={volume}
+										onChange={handleVolumeChange}
+										className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
+									/>
+								</div>
+								<span className="text-sm text-zinc-400 w-8">{Math.round(volume * 100)}%</span>
 							</div>
-							<span className="text-sm text-zinc-400 w-8">{Math.round(volume * 100)}%</span>
 						</div>
 					</div>
 
 					{/* Current Track Info */}
 					<div className="text-center">
 						<p className="font-medium truncate">{currentTrack.name.replace(/\.[^/.]+$/, '')}</p>
+					</div>
+				</div>
+			)}
+
+			{/* Equalizer Modal */}
+			{isEqOpen && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+					<div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
+						<div className="flex items-center justify-between mb-4">
+							<h2 className="text-lg font-semibold text-zinc-50">Equalizador</h2>
+							<button
+								type="button"
+								onClick={() => setIsEqOpen(false)}
+								className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+								aria-label="Fechar"
+							>
+								<X className="size-5" />
+							</button>
+						</div>
+
+						<div className="space-y-4">
+							{eqBands.map((band, index) => (
+								<div key={`${band.frequency}-${index}`} className="flex flex-col gap-1">
+									<div className="flex items-center justify-between text-xs text-zinc-400">
+										<span>{band.frequency >= 1000 ? `${band.frequency / 1000}k` : band.frequency} Hz</span>
+										<span>{band.gain >= 0 ? `+${band.gain.toFixed(1)}` : band.gain.toFixed(1)} dB</span>
+									</div>
+									<div className="relative">
+										<div
+											className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all"
+											style={{
+												width: `${((band.gain + 12) / 24) * 100}%`,
+											}}
+										/>
+										<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
+										<input
+											type="range"
+											min={-12}
+											max={12}
+											step={0.1}
+											value={band.gain}
+											onChange={(e) => {
+												const newGain = Number(e.target.value)
+												setEqBands((prev) => prev.map((b, i) => (i === index ? { ...b, gain: newGain } : b)))
+											}}
+											className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
+										/>
+									</div>
+								</div>
+							))}
+						</div>
+
+						<div className="mt-4 flex justify-end">
+							<button
+								type="button"
+								onClick={() => setEqBands([...defaultEqBands])}
+								className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+							>
+								Resetar EQ
+							</button>
+						</div>
 					</div>
 				</div>
 			)}
