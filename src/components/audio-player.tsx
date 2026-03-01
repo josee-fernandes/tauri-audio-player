@@ -626,7 +626,9 @@ export function AudioPlayer() {
 							variant={currentTrack?.path === file.path ? 'default' : 'outline'}
 							size="lg"
 							className="flex justify-start"
-							onClick={() => playTrack(file)}
+							onClick={() => {
+								currentTrack?.path !== file.path && playTrack(file)
+							}}
 						>
 							<span
 								className={cn('w-4 flex items-center justify-center', {

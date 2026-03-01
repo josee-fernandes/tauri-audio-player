@@ -1,7 +1,12 @@
 import { useMemo } from 'react'
+import { cn } from '@/lib/utils'
 import { useTheme } from './theme-provider'
 
-export function Logo() {
+interface LogoProps {
+	className?: string
+}
+
+export function Logo({ className }: LogoProps) {
 	const { theme } = useTheme()
 
 	const fill = useMemo(() => {
@@ -18,7 +23,7 @@ export function Logo() {
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
 			xmlnsXlink="http://www.w3.org/1999/xlink"
-			className="h-8"
+			className={cn('h-8', className)}
 		>
 			<title>Waveez</title>
 			<path
