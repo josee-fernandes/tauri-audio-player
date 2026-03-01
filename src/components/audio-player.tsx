@@ -4,7 +4,6 @@ import { readDir, readFile } from '@tauri-apps/plugin-fs'
 import Lenis from 'lenis'
 import {
 	ChevronDown,
-	ChevronUp,
 	FolderOpen,
 	LayoutGrid,
 	LayoutList,
@@ -599,14 +598,24 @@ export const AudioPlayer: React.FC = () => {
 					})}
 				>
 					{selectedFolder !== defaultAudioDir && (
-						<Button variant="secondary" onClick={handleParentDirectory}>
-							<FolderOpen className="size-4" />
+						<Button variant="secondary" size="lg" className="flex justify-start" onClick={handleParentDirectory}>
+							<span>
+								<FolderOpen className="size-4" />
+							</span>
 							<span>...</span>
 						</Button>
 					)}
 					{directories?.map((directory) => (
-						<Button key={directory.path} variant="secondary" onClick={() => handleOpenDirectory(directory.path)}>
-							<FolderOpen className="size-4" />
+						<Button
+							key={directory.path}
+							variant="secondary"
+							size="lg"
+							className="flex justify-start"
+							onClick={() => handleOpenDirectory(directory.path)}
+						>
+							<span>
+								<FolderOpen className="size-4" />
+							</span>
 							<span>{directory.name}</span>
 						</Button>
 					))}
@@ -614,10 +623,15 @@ export const AudioPlayer: React.FC = () => {
 						<Button
 							key={file.path}
 							variant={currentTrack?.path === file.path ? 'default' : 'outline'}
+							size="lg"
 							className="flex justify-start"
 							onClick={() => playTrack(file)}
 						>
-							<span className={cn(currentTrack?.path !== file.path && 'text-primary/30')}>
+							<span
+								className={cn('w-4 flex items-center justify-center', {
+									'text-primary/30': currentTrack?.path !== file.path,
+								})}
+							>
 								{`${index + 1}`.padStart(2, '0')}
 							</span>
 							<span className="truncate flex-1 text-left">{file.name.replace(/\.[^/.]+$/, '')}</span>
@@ -635,10 +649,12 @@ export const AudioPlayer: React.FC = () => {
 			{/* Controls */}
 			{currentTrack && (
 				<div
-					className={cn('border-t p-4 flex flex-col gap-4 transition-all', { ' translate-y-[75%] ': controlsHidden })}
+					className={cn('border-t p-4 flex flex-col gap-4 transition-all', {
+						'translate-y-[75%] ': controlsHidden,
+					})}
 				>
 					<Button variant="ghost" onClick={() => setControlsHidden((oldControlsHidden) => !oldControlsHidden)}>
-						{controlsHidden ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+						<ChevronDown className={cn('size-4 transition-all duration-500', { 'rotate-180': controlsHidden })} />
 					</Button>
 					{/* Progress Bar */}
 					<div className="">
@@ -666,19 +682,19 @@ export const AudioPlayer: React.FC = () => {
 
 					{/* Main Controls */}
 					<div className="flex items-center justify-center gap-4 mt-6">
-						<Button variant="ghost" onClick={previousTrack}>
+						<Button variant="ghost" size="icon-sm" onClick={previousTrack}>
 							<SkipBack className="size-4" />
 						</Button>
 
-						<Button variant="ghost" onClick={togglePlayPause}>
+						<Button variant="ghost" size="icon-sm" onClick={togglePlayPause}>
 							{isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
 						</Button>
 
-						<Button variant="ghost" onClick={stopTrack}>
+						<Button variant="ghost" size="icon-sm" onClick={stopTrack}>
 							<Square className="size-4" />
 						</Button>
 
-						<Button variant="ghost" onClick={nextTrack}>
+						<Button variant="ghost" size="icon-sm" onClick={nextTrack}>
 							<SkipForward className="size-4" />
 						</Button>
 					</div>
@@ -686,16 +702,13 @@ export const AudioPlayer: React.FC = () => {
 					{/* Secondary Controls */}
 					<div className="flex items-center justify-between">
 						{/* Repeat Button */}
-						<Button
-							variant={repeatMode === 'one' ? 'default' : repeatMode === 'all' ? 'secondary' : 'ghost'}
-							onClick={toggleRepeat}
-						>
+						<Button variant={repeatMode === 'none' ? 'ghost' : 'default'} size="icon-sm" onClick={toggleRepeat}>
 							{repeatMode === 'one' ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
 						</Button>
 
 						<div className="flex items-center gap-4">
 							{/* EQ Button */}
-							<Button variant="ghost" onClick={openEq} title="Equalizador">
+							<Button variant="ghost" size="icon-sm" title="Equalizador" onClick={openEq}>
 								<SlidersVertical className="size-4" />
 							</Button>
 
@@ -703,6 +716,7 @@ export const AudioPlayer: React.FC = () => {
 							<div className="flex items-center gap-2">
 								<Button
 									variant="ghost"
+									size="icon-sm"
 									onClick={() => {
 										if (audioRef.current) {
 											audioRef.current.muted = !audioRef.current.muted

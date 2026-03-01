@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "fonts.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -117,23 +118,22 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+    font-family: "Geist", sans-serif;
+  }
 }
 
 @keyframes marquee {
   0% {
-      transform: translateX(150%);
+    transform: translateX(150%);
   }
   100% {
-      transform: translateX(-150%);
+    transform: translateX(-150%);
   }
 }
 
-
 @utility animate-marquee {
-    @apply whitespace-nowrap animate-[marquee_10s_linear_infinite];
-    
+  @apply whitespace-nowrap animate-[marquee_12s_linear_infinite];
 }

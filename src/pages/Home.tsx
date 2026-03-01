@@ -1,4 +1,4 @@
-import { AudioPlayer } from '@/components/AudioPlayer'
+import { AudioPlayer } from '@/components/audio-player'
 
 export const Home: React.FC = () => {
 	return (

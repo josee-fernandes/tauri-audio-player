@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@font-face {
+  font-display: block;
+  font-family: "Geist";
+  src: url("../assets/fonts/Geist/Geist-Var.ttf");
+}
+
+@font-face {
+  font-display: block;
+  font-family: "Geist";
+  font-style: italic;
+  src: url("../assets/fonts/Geist/Geist-Italic-Var.ttf");
+}
+
+@font-face {
+  font-display: block;
+  font-family: "GeistMono";
+  src: url("../assets/fonts/GeistMono/GeistMono-Var.ttf");
+}
+
+@font-face {
+  font-display: block;
+  font-family: "GeistMono";
+  font-style: italic;
+  src: url("../assets/fonts/GeistMono/GeistMono-Italic-Var.ttf");
+}
+
+@utility font-sans {
+  font-family: "Geist", sans-serif;
+}
+
+@utility font-mono {
+  font-family: "GeistMono", monospace;
+}
+
+:root {
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  user-select: none !important;
+}
