@@ -1,11 +1,13 @@
 import { Toaster } from 'sonner'
 import { TitleBar } from '@/components/Window/TitleBar'
 import { Home } from '@/pages/Home'
+import '@/styles/global.old.css'
 import '@/styles/global.css'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export const App: React.FC = () => {
 	return (
-		<>
+		<ThemeProvider defaultTheme="dark">
 			<Toaster />
 			<div className="relative w-full h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 flex flex-col">
 				<div className="absolute left-0 top-0 w-full h-full bg-white z-9999 animate-slide [animation-delay:100ms]" />
@@ -18,7 +20,7 @@ export const App: React.FC = () => {
 					<Home />
 				</div>
 			</div>
-		</>
+		</ThemeProvider>
 	)
 }
 

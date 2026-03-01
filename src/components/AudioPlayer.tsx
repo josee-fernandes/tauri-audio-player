@@ -1,9 +1,10 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { audioDir } from '@tauri-apps/api/path'
 import { readDir, readFile } from '@tauri-apps/plugin-fs'
-import clsx from 'clsx'
 import Lenis from 'lenis'
 import {
+	ChevronDown,
+	ChevronUp,
 	FolderOpen,
 	LayoutGrid,
 	LayoutList,
@@ -13,15 +14,19 @@ import {
 	Repeat1,
 	SkipBack,
 	SkipForward,
-	SlidersHorizontal,
-	SquareStop,
+	SlidersVertical,
+	Square,
+	Volume1,
 	Volume2,
+	VolumeOff,
+	VolumeX,
 	X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-
+import { Button } from '@/components/ui/button'
 import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
+import { cn } from '@/lib/utils'
 
 const EQ_STORAGE_KEY = 'audio-player-eq-settings'
 
@@ -53,7 +58,6 @@ export const AudioPlayer: React.FC = () => {
 	const [selectedFolder, setSelectedFolder] = useState<string>('')
 	const [scrollPercentage, setScrollPercentage] = useState(0)
 	const [view, setView] = useState<'list' | 'grid'>('list')
-
 	const [eqBands, setEqBands] = useState<EqBand[]>(() => {
 		if (typeof window === 'undefined') return defaultEqBands
 		try {
@@ -65,8 +69,8 @@ export const AudioPlayer: React.FC = () => {
 			return defaultEqBands
 		}
 	})
-
 	const [isEqOpen, setIsEqOpen] = useState(false)
+	const [controlsHidden, setControlsHidden] = useState(false)
 
 	const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -243,9 +247,7 @@ export const AudioPlayer: React.FC = () => {
 					await ctx.resume()
 				}
 
-				const audioBuffer = await ctx.decodeAudioData(
-					arrayBuffer.slice(0) as ArrayBuffer,
-				)
+				const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0) as ArrayBuffer)
 				ensureEqContextAndFiltersForBuffer()
 				const filters = eqFiltersRef.current
 				if (filters.length === 0) return
@@ -327,8 +329,7 @@ export const AudioPlayer: React.FC = () => {
 			const ctx = audioContextRef.current
 			const source = bufferSourceRef.current
 			if (isPlaying && source && ctx) {
-				bufferStartOffsetRef.current =
-					bufferStartOffsetRef.current + (ctx.currentTime - bufferStartTimeRef.current)
+				bufferStartOffsetRef.current = bufferStartOffsetRef.current + (ctx.currentTime - bufferStartTimeRef.current)
 				source.stop()
 				bufferSourceRef.current = null
 				setIsPlaying(false)
@@ -562,44 +563,26 @@ export const AudioPlayer: React.FC = () => {
 	return (
 		<div className="flex flex-col h-full">
 			{/* Header */}
-			<header className="p-4 border-b border-zinc-900 flex justify-between items-end">
+			<header className="p-4 border-b flex justify-between items-end">
 				<div className="flex flex-col justify-center gap-2">
 					{selectedFolder && (
-						<p className="mt-2 text-sm text-zinc-500 font-bold">Pasta atual: {selectedFolder.split('/').pop()}</p>
+						<p className="mt-2 text-sm text-muted-foreground">Pasta atual: {selectedFolder.split('/').pop()}</p>
 					)}
 					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							onClick={() => setView('list')}
-							className={clsx(
-								'p-2 bg-transparent border-2 border-zinc-900 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer',
-								{
-									'bg-indigo-600! hover:bg-indigo-700! border-indigo-600!': view === 'list',
-								},
-							)}
-						>
-							<LayoutList className="size-4 text-zinc-50" />
-						</button>
-						<button
-							type="button"
-							onClick={() => setView('grid')}
-							className={clsx(
-								'p-2 bg-transparent border-2 border-zinc-900 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer',
-								{
-									'bg-indigo-600! hover:bg-indigo-700! border-indigo-600!': view === 'grid',
-								},
-							)}
-						>
-							<LayoutGrid className="size-4 text-zinc-50" />
-						</button>
+						<Button variant={view === 'list' ? 'default' : 'outline'} onClick={() => setView('list')}>
+							<LayoutList className="size-4" />
+						</Button>
+						<Button variant={view === 'grid' ? 'default' : 'outline'} onClick={() => setView('grid')}>
+							<LayoutGrid className="size-4" />
+						</Button>
 					</div>
 				</div>
 				<div>
 					<div className="flex flex-col gap-2 w-20">
-						<span className="text-right font-bold text-zinc-500">{scrollPercentage}</span>
+						<span className="text-right font-bold text-muted-foreground">{scrollPercentage}</span>
 						<div className="relative rounded-lg overflow-hidden">
-							<div className="absolute h-2 bg-indigo-600 z-10 rounded-lg" style={{ width: `${scrollPercentage}%` }} />
-							<div className="h-2 w-full bg-zinc-900 rounded-lg" />
+							<div className="absolute h-2 bg-primary z-10 rounded-lg" style={{ width: `${scrollPercentage}%` }} />
+							<div className="h-2 w-full bg-muted rounded-lg" />
 						</div>
 					</div>
 				</div>
@@ -609,95 +592,66 @@ export const AudioPlayer: React.FC = () => {
 			<div ref={listWrapperRef} className="relative flex-1 p-4 overflow-hidden">
 				<div
 					ref={listContentRef}
-					className={clsx({
+					className={cn({
 						'flex flex-col gap-1': view === 'list',
 						'grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-1':
 							view === 'grid',
 					})}
 				>
 					{selectedFolder !== defaultAudioDir && (
-						<button
-							onDoubleClick={handleParentDirectory}
-							type="button"
-							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
-						>
-							<div className="flex items-center gap-3">
-								<span className="text-sm text-zinc-50 w-8 font-bold">
-									<FolderOpen className="size-4 text-zinc-50" />
-								</span>
-								<span className="flex-1 truncate text-zinc-50">..</span>
-							</div>
-						</button>
+						<Button variant="secondary" onClick={handleParentDirectory}>
+							<FolderOpen className="size-4" />
+							<span>...</span>
+						</Button>
 					)}
 					{directories?.map((directory) => (
-						<button
-							key={directory.path}
-							onDoubleClick={() => handleOpenDirectory(directory.path)}
-							type="button"
-							className="relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-indigo-800 hover:bg-indigo-600/50"
-						>
-							<div className="flex items-center gap-3">
-								<span className="text-sm text-zinc-50 w-8 font-bold">
-									<FolderOpen className="size-4 text-zinc-50" />
-								</span>
-								<span className="flex-1 truncate text-zinc-50">{directory.name}</span>
-							</div>
-						</button>
+						<Button key={directory.path} variant="secondary" onClick={() => handleOpenDirectory(directory.path)}>
+							<FolderOpen className="size-4" />
+							<span>{directory.name}</span>
+						</Button>
 					))}
 					{audioFiles?.map((file, index) => (
-						<button
+						<Button
 							key={file.path}
-							onDoubleClick={() => playTrack(file)}
-							type="button"
-							className={clsx(
-								'relative w-full text-left p-3 rounded-lg cursor-pointer transition-colors border-2 bg-transparent border-zinc-900 hover:bg-zinc-900/50 ',
-								{
-									'bg-indigo-600! border-indigo-600! text-zinc-50!': currentTrack?.path === file.path,
-								},
-							)}
+							variant={currentTrack?.path === file.path ? 'default' : 'outline'}
+							className="flex justify-start"
+							onClick={() => playTrack(file)}
 						>
-							<div className="flex items-center gap-3">
-								<span
-									className={clsx('text-sm text-zinc-500 w-8', {
-										'text-zinc-50! font-bold': currentTrack?.path === file.path,
-									})}
-								>
-									{index + 1}
-								</span>
-								<span
-									className={clsx('flex-1 truncate', {
-										'text-zinc-50! font-bold': currentTrack?.path === file.path,
-									})}
-								>
-									{file.name.replace(/\.[^/.]+$/, '')}
-								</span>
-								{currentTrack?.path === file.path && isPlaying && (
-									<div className="relative">
-										<div className="w-2 h-2 bg-white rounded-full animate-ping " />
-										<div className="absolute inset-0 w-2 h-2 bg-white rounded-full animate-pulse" />
-									</div>
-								)}
-							</div>
-						</button>
+							<span className={cn(currentTrack?.path !== file.path && 'text-primary/30')}>
+								{`${index + 1}`.padStart(2, '0')}
+							</span>
+							<span className="truncate flex-1 text-left">{file.name.replace(/\.[^/.]+$/, '')}</span>
+							{currentTrack?.path === file.path && isPlaying && (
+								<div className="relative">
+									<div className="w-2 h-2 bg-primary-foreground rounded-full animate-ping " />
+									<div className="absolute inset-0 w-2 h-2 bg-accent rounded-full animate-pulse" />
+								</div>
+							)}
+						</Button>
 					))}
 				</div>
 			</div>
 
 			{/* Controls */}
 			{currentTrack && (
-				<div className="border-t border-zinc-900 p-4 space-y-4 border">
+				<div
+					className={cn('border-t p-4 flex flex-col gap-4 transition-all', { ' translate-y-[75%] ': controlsHidden })}
+				>
+					<Button variant="ghost" onClick={() => setControlsHidden((oldControlsHidden) => !oldControlsHidden)}>
+						{controlsHidden ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+					</Button>
 					{/* Progress Bar */}
-					<div className="space-y-2">
-						<div className="flex justify-between text-sm text-zinc-500">
+					<div className="">
+						<div className="flex justify-between text-sm text-muted-foreground">
 							<span>{formatTime(currentTime)}</span>
 							<span>{formatTime(duration)}</span>
 						</div>
-						<div className="relative">
+						<div className="mt-4 relative">
 							<div
-								className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 animate-gradient-cycle rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:absolute after:-top-0.5 after:-right-1.5 after:bg-zinc-50 after:rounded-full gradient-cycle"
+								className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:absolute after:-top-0.5 after:-right-1.5 after:bg-primary after:rounded-full"
 								style={{ width: `${(currentTime / duration) * 100}%` }}
 							/>
-							<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
+							<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-muted rounded-lg w-full" />
 
 							<input
 								type="range"
@@ -712,81 +666,60 @@ export const AudioPlayer: React.FC = () => {
 
 					{/* Main Controls */}
 					<div className="flex items-center justify-center gap-4 mt-6">
-						<button
-							type="button"
-							onClick={previousTrack}
-							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-						>
-							<SkipBack className="size-4 text-zinc-50 fill-zinc-50" />
-						</button>
+						<Button variant="ghost" onClick={previousTrack}>
+							<SkipBack className="size-4" />
+						</Button>
 
-						<button
-							type="button"
-							onClick={togglePlayPause}
-							className="p-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
-						>
-							{isPlaying ? (
-								<Pause className="size-4 text-zinc-50 fill-zinc-50" />
-							) : (
-								<Play className="size-4 text-zinc-50 fill-zinc-50" />
-							)}
-						</button>
+						<Button variant="ghost" onClick={togglePlayPause}>
+							{isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+						</Button>
 
-						<button
-							type="button"
-							onClick={stopTrack}
-							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-						>
-							<SquareStop className="size-4 text-zinc-50 fill-zinc-50" />
-						</button>
+						<Button variant="ghost" onClick={stopTrack}>
+							<Square className="size-4" />
+						</Button>
 
-						<button
-							type="button"
-							onClick={nextTrack}
-							className="p-2 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-						>
-							<SkipForward className="size-4 text-zinc-50 fill-zinc-50" />
-						</button>
+						<Button variant="ghost" onClick={nextTrack}>
+							<SkipForward className="size-4" />
+						</Button>
 					</div>
 
 					{/* Secondary Controls */}
 					<div className="flex items-center justify-between">
 						{/* Repeat Button */}
-						<button
-							type="button"
+						<Button
+							variant={repeatMode === 'one' ? 'default' : repeatMode === 'all' ? 'secondary' : 'ghost'}
 							onClick={toggleRepeat}
-							className={clsx(
-								'p-2 rounded-lg transition-colors cursor-pointer',
-								repeatMode !== 'none' ? 'bg-indigo-600 text-white' : 'hover:bg-zinc-900',
-							)}
 						>
-							{repeatMode === 'one' ? (
-								<Repeat1 className="size-4 text-zinc-50" />
-							) : (
-								<Repeat className="size-4 text-zinc-50" />
-							)}
-						</button>
+							{repeatMode === 'one' ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
+						</Button>
 
 						<div className="flex items-center gap-4">
 							{/* EQ Button */}
-							<button
-								type="button"
-								onClick={openEq}
-								className="p-2 rounded-lg transition-colors cursor-pointer hover:bg-zinc-900"
-								title="Equalizador"
-							>
-								<SlidersHorizontal className="size-4 text-zinc-50" />
-							</button>
+							<Button variant="ghost" onClick={openEq} title="Equalizador">
+								<SlidersVertical className="size-4" />
+							</Button>
 
 							{/* Volume Control */}
 							<div className="flex items-center gap-2">
-								<Volume2 className="size-4 text-zinc-50" />
+								<Button
+									variant="ghost"
+									onClick={() => {
+										if (audioRef.current) {
+											audioRef.current.muted = !audioRef.current.muted
+										}
+									}}
+								>
+									{audioRef.current?.muted && <VolumeOff className="size-4" />}
+									{!audioRef.current?.muted && volume === 0 && <VolumeX className="size-4" />}
+									{!audioRef.current?.muted && volume > 0 && volume < 0.5 && <Volume1 className="size-4" />}
+									{!audioRef.current?.muted && volume >= 0.5 && <Volume2 className="size-4" />}
+								</Button>
 								<div className="relative w-48">
 									<div
-										className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-zinc-50 after:rounded-full"
+										className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-primary after:rounded-full"
 										style={{ width: `${Math.round(volume * 100)}%` }}
 									/>
-									<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
+									<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-muted rounded-lg w-full" />
 									<input
 										type="range"
 										min={0}
@@ -797,14 +730,16 @@ export const AudioPlayer: React.FC = () => {
 										className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
 									/>
 								</div>
-								<span className="text-sm text-zinc-400 w-8">{Math.round(volume * 100)}%</span>
+								<span className="text-sm text-muted-foreground w-8">{Math.round(volume * 100)}%</span>
 							</div>
 						</div>
 					</div>
 
 					{/* Current Track Info */}
-					<div className="text-center">
-						<p className="font-medium truncate">{currentTrack.name.replace(/\.[^/.]+$/, '')}</p>
+					<div className="text-center text-sm">
+						<p className="font-medium text-muted-foreground animate-marquee">
+							{currentTrack.name.replace(/\.[^/.]+$/, '')}
+						</p>
 					</div>
 				</div>
 			)}
@@ -815,14 +750,13 @@ export const AudioPlayer: React.FC = () => {
 					<div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
 						<div className="flex items-center justify-between mb-4">
 							<h2 className="text-lg font-semibold text-zinc-50">Equalizador</h2>
-							<button
-								type="button"
+							<Button
 								onClick={() => setIsEqOpen(false)}
 								className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
 								aria-label="Fechar"
 							>
 								<X className="size-5" />
-							</button>
+							</Button>
 						</div>
 
 						<div className="space-y-4">
@@ -858,13 +792,12 @@ export const AudioPlayer: React.FC = () => {
 						</div>
 
 						<div className="mt-4 flex justify-end">
-							<button
-								type="button"
+							<Button
 								onClick={() => setEqBands([...defaultEqBands])}
 								className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
 							>
 								Resetar EQ
-							</button>
+							</Button>
 						</div>
 					</div>
 				</div>
