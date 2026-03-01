@@ -11,6 +11,7 @@ import {
 	Play,
 	Repeat,
 	Repeat1,
+	RotateCcw,
 	SkipBack,
 	SkipForward,
 	SlidersVertical,
@@ -44,7 +45,7 @@ const defaultEqBands: EqBand[] = [
 	{ frequency: 14000, gain: 0, q: 1, type: 'highshelf' },
 ]
 
-export const AudioPlayer: React.FC = () => {
+export function AudioPlayer() {
 	const [defaultAudioDir, setDefaultAudioDir] = useState<string>('')
 	const [directories, setDirectories] = useState<Directory[]>([])
 	const [audioFiles, setAudioFiles] = useState<AudioFile[]>([])
@@ -629,7 +630,7 @@ export const AudioPlayer: React.FC = () => {
 						>
 							<span
 								className={cn('w-4 flex items-center justify-center', {
-									'text-primary/30': currentTrack?.path !== file.path,
+									'opacity-30': currentTrack?.path !== file.path,
 								})}
 							>
 								{`${index + 1}`.padStart(2, '0')}
@@ -638,7 +639,7 @@ export const AudioPlayer: React.FC = () => {
 							{currentTrack?.path === file.path && isPlaying && (
 								<div className="relative">
 									<div className="w-2 h-2 bg-primary-foreground rounded-full animate-ping " />
-									<div className="absolute inset-0 w-2 h-2 bg-accent rounded-full animate-pulse" />
+									<div className="absolute inset-0 w-2 h-2 bg-primary-foreground rounded-full animate-pulse" />
 								</div>
 							)}
 						</Button>
@@ -649,12 +650,12 @@ export const AudioPlayer: React.FC = () => {
 			{/* Controls */}
 			{currentTrack && (
 				<div
-					className={cn('border-t p-4 flex flex-col gap-4 transition-all', {
+					className={cn('border-t p-4 flex flex-col gap-4 transition-all duration-400', {
 						'translate-y-[75%] ': controlsHidden,
 					})}
 				>
 					<Button variant="ghost" onClick={() => setControlsHidden((oldControlsHidden) => !oldControlsHidden)}>
-						<ChevronDown className={cn('size-4 transition-all duration-500', { 'rotate-180': controlsHidden })} />
+						<ChevronDown className={cn('size-4 transition-all duration-400', { 'rotate-180': controlsHidden })} />
 					</Button>
 					{/* Progress Bar */}
 					<div className="">
@@ -760,34 +761,30 @@ export const AudioPlayer: React.FC = () => {
 
 			{/* Equalizer Modal */}
 			{isEqOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-					<div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-xs">
+					<div className="bg-background border rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
 						<div className="flex items-center justify-between mb-4">
-							<h2 className="text-lg font-semibold text-zinc-50">Equalizador</h2>
-							<Button
-								onClick={() => setIsEqOpen(false)}
-								className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
-								aria-label="Fechar"
-							>
-								<X className="size-5" />
+							<h2 className="text-lg font-semibold text-foreground">Equalizador</h2>
+							<Button variant="ghost" size="icon-sm" aria-label="Fechar" onClick={() => setIsEqOpen(false)}>
+								<X className="size-4" />
 							</Button>
 						</div>
 
-						<div className="space-y-4">
+						<div className="flex flex-col gap-4">
 							{eqBands.map((band, index) => (
 								<div key={`${band.frequency}-${index}`} className="flex flex-col gap-1">
-									<div className="flex items-center justify-between text-xs text-zinc-400">
+									<div className="flex items-center justify-between text-xs text-muted-foreground">
 										<span>{band.frequency >= 1000 ? `${band.frequency / 1000}k` : band.frequency} Hz</span>
 										<span>{band.gain >= 0 ? `+${band.gain.toFixed(1)}` : band.gain.toFixed(1)} dB</span>
 									</div>
 									<div className="relative">
 										<div
-											className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-indigo-600 rounded-lg z-10 transition-all"
+											className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-lg z-10 transition-all"
 											style={{
 												width: `${((band.gain + 12) / 24) * 100}%`,
 											}}
 										/>
-										<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-zinc-900 rounded-lg w-full" />
+										<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-muted rounded-lg w-full" />
 										<input
 											type="range"
 											min={-12}
@@ -806,10 +803,8 @@ export const AudioPlayer: React.FC = () => {
 						</div>
 
 						<div className="mt-4 flex justify-end">
-							<Button
-								onClick={() => setEqBands([...defaultEqBands])}
-								className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
-							>
+							<Button variant="secondary" onClick={() => setEqBands([...defaultEqBands])}>
+								<RotateCcw className="size-4" />
 								Resetar EQ
 							</Button>
 						</div>
@@ -824,5 +819,3 @@ export const AudioPlayer: React.FC = () => {
 		</div>
 	)
 }
-
-AudioPlayer.displayName = 'AudioPlayer'
