@@ -1,4 +1,4 @@
-interface Directory {
+export interface Directory {
 	name: string
 	path: string
 	isDirectory: boolean
@@ -6,7 +6,7 @@ interface Directory {
 	isSymlink: boolean
 }
 
-interface AudioFile {
+export interface AudioFile {
 	name: string
 	path: string
 }

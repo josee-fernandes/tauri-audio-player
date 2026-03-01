@@ -1,32 +1,18 @@
+import { useGSAP } from '@gsap/react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { audioDir } from '@tauri-apps/api/path'
 import { readDir, readFile } from '@tauri-apps/plugin-fs'
+import { gsap } from 'gsap'
 import Lenis from 'lenis'
-import {
-	ChevronDown,
-	FolderOpen,
-	LayoutGrid,
-	LayoutList,
-	Pause,
-	Play,
-	Repeat,
-	Repeat1,
-	RotateCcw,
-	SkipBack,
-	SkipForward,
-	SlidersVertical,
-	Square,
-	Volume1,
-	Volume2,
-	VolumeOff,
-	VolumeX,
-	X,
-} from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { FolderOpen, RotateCcw, X } from 'lucide-react'
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import type { AudioFile, Directory } from '@/@types/audio'
 import { Button } from '@/components/ui/button'
 import { AUDIO_EXTENSIONS, DEFAULT_VOLUME } from '@/constants/audio'
 import { cn } from '@/lib/utils'
+import { PlayerControls } from './player/player-controls'
+import { PlayerHeader } from './player/player-header'
 
 const EQ_STORAGE_KEY = 'audio-player-eq-settings'
 
@@ -88,6 +74,7 @@ export function AudioPlayer() {
 	const useBufferModeRef = useRef(false)
 	const eqBufferModeRef = useRef(false)
 	const timeUpdateRef = useRef<number | null>(null)
+	const controlsWrapperRef = useRef<HTMLDivElement>(null)
 
 	const loadAudioFiles = useCallback(async (folderPath: string) => {
 		try {
@@ -560,36 +547,25 @@ export function AudioPlayer() {
 		}
 	}, [])
 
+	useGSAP(
+		() => {
+			if (!controlsWrapperRef.current) return
+			gsap.to(controlsWrapperRef.current, {
+				height: controlsHidden ? '4.5rem' : 'auto',
+				duration: 0.7,
+				ease: 'expo.inOut',
+				overwrite: true,
+			})
+		},
+		{ dependencies: [controlsHidden, currentTrack], scope: controlsWrapperRef },
+	)
+
 	return (
-		<div className="flex flex-col h-full">
-			{/* Header */}
-			<header className="p-4 border-b flex justify-between items-end">
-				<div className="flex flex-col justify-center gap-2">
-					{selectedFolder && (
-						<p className="mt-2 text-sm text-muted-foreground">Pasta atual: {selectedFolder.split('/').pop()}</p>
-					)}
-					<div className="flex items-center gap-2">
-						<Button variant={view === 'list' ? 'default' : 'outline'} onClick={() => setView('list')}>
-							<LayoutList className="size-4" />
-						</Button>
-						<Button variant={view === 'grid' ? 'default' : 'outline'} onClick={() => setView('grid')}>
-							<LayoutGrid className="size-4" />
-						</Button>
-					</div>
-				</div>
-				<div>
-					<div className="flex flex-col gap-2 w-20">
-						<span className="text-right font-bold text-muted-foreground">{scrollPercentage}</span>
-						<div className="relative rounded-lg overflow-hidden">
-							<div className="absolute h-2 bg-primary z-10 rounded-lg" style={{ width: `${scrollPercentage}%` }} />
-							<div className="h-2 w-full bg-muted rounded-lg" />
-						</div>
-					</div>
-				</div>
-			</header>
+		<div className="flex flex-col h-full overflow-hidden">
+			<PlayerHeader selectedFolder={selectedFolder} view={view} setView={setView} scrollPercentage={scrollPercentage} />
 
 			{/* File List */}
-			<div ref={listWrapperRef} className="relative flex-1 p-4 overflow-hidden">
+			<div ref={listWrapperRef} className="relative flex-1 min-h-0 p-4 overflow-hidden">
 				<div
 					ref={listContentRef}
 					className={cn({
@@ -631,7 +607,7 @@ export function AudioPlayer() {
 							}}
 						>
 							<span
-								className={cn('w-4 flex items-center justify-center', {
+								className={cn('w-4 flex items-center justify-center font-mono', {
 									'opacity-30': currentTrack?.path !== file.path,
 								})}
 							>
@@ -650,114 +626,29 @@ export function AudioPlayer() {
 			</div>
 
 			{/* Controls */}
-			{currentTrack && (
-				<div
-					className={cn('border-t p-4 flex flex-col gap-4 transition-all duration-400', {
-						'translate-y-[75%] ': controlsHidden,
-					})}
-				>
-					<Button variant="ghost" onClick={() => setControlsHidden((oldControlsHidden) => !oldControlsHidden)}>
-						<ChevronDown className={cn('size-4 transition-all duration-400', { 'rotate-180': controlsHidden })} />
-					</Button>
-					{/* Progress Bar */}
-					<div className="">
-						<div className="flex justify-between text-sm text-muted-foreground">
-							<span>{formatTime(currentTime)}</span>
-							<span>{formatTime(duration)}</span>
-						</div>
-						<div className="mt-4 relative">
-							<div
-								className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:absolute after:-top-0.5 after:-right-1.5 after:bg-primary after:rounded-full"
-								style={{ width: `${(currentTime / duration) * 100}%` }}
-							/>
-							<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-muted rounded-lg w-full" />
-
-							<input
-								type="range"
-								min={0}
-								max={duration || 0}
-								value={currentTime}
-								onChange={handleSeek}
-								className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
-							/>
-						</div>
-					</div>
-
-					{/* Main Controls */}
-					<div className="flex items-center justify-center gap-4 mt-6">
-						<Button variant="ghost" size="icon-sm" onClick={previousTrack}>
-							<SkipBack className="size-4" />
-						</Button>
-
-						<Button variant="ghost" size="icon-sm" onClick={togglePlayPause}>
-							{isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-						</Button>
-
-						<Button variant="ghost" size="icon-sm" onClick={stopTrack}>
-							<Square className="size-4" />
-						</Button>
-
-						<Button variant="ghost" size="icon-sm" onClick={nextTrack}>
-							<SkipForward className="size-4" />
-						</Button>
-					</div>
-
-					{/* Secondary Controls */}
-					<div className="flex items-center justify-between">
-						{/* Repeat Button */}
-						<Button variant={repeatMode === 'none' ? 'ghost' : 'default'} size="icon-sm" onClick={toggleRepeat}>
-							{repeatMode === 'one' ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
-						</Button>
-
-						<div className="flex items-center gap-4">
-							{/* EQ Button */}
-							<Button variant="ghost" size="icon-sm" title="Equalizador" onClick={openEq}>
-								<SlidersVertical className="size-4" />
-							</Button>
-
-							{/* Volume Control */}
-							<div className="flex items-center gap-2">
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									onClick={() => {
-										if (audioRef.current) {
-											audioRef.current.muted = !audioRef.current.muted
-										}
-									}}
-								>
-									{audioRef.current?.muted && <VolumeOff className="size-4" />}
-									{!audioRef.current?.muted && volume === 0 && <VolumeX className="size-4" />}
-									{!audioRef.current?.muted && volume > 0 && volume < 0.5 && <Volume1 className="size-4" />}
-									{!audioRef.current?.muted && volume >= 0.5 && <Volume2 className="size-4" />}
-								</Button>
-								<div className="relative w-48">
-									<div
-										className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-lg z-10 transition-all after:content-[''] after:block after:w-3 after:h-3 after:-top-0.5 after:absolute after:-right-1.5 after:bg-primary after:rounded-full"
-										style={{ width: `${Math.round(volume * 100)}%` }}
-									/>
-									<div className="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-muted rounded-lg w-full" />
-									<input
-										type="range"
-										min={0}
-										max={1}
-										step={0.001}
-										value={volume}
-										onChange={handleVolumeChange}
-										className="absolute left-0 top-1/2 -translate-y-1/2 w-full rounded-lg appearance-none cursor-pointer slider z-20 opacity-0"
-									/>
-								</div>
-								<span className="text-sm text-muted-foreground w-8">{Math.round(volume * 100)}%</span>
-							</div>
-						</div>
-					</div>
-
-					{/* Current Track Info */}
-					<div className="text-center text-sm">
-						<p className="font-medium text-muted-foreground animate-marquee">
-							{currentTrack.name.replace(/\.[^/.]+$/, '')}
-						</p>
-					</div>
+			{currentTrack && audioRef.current && (
+				<div ref={controlsWrapperRef} className="shrink-0 overflow-hidden">
+					<PlayerControls
+						audioRef={audioRef as RefObject<HTMLAudioElement>}
+						repeatMode={repeatMode}
+						toggleRepeat={toggleRepeat}
+						openEq={openEq}
+						volume={volume}
+						muted={audioRef.current?.muted || false}
+						currentTrack={currentTrack}
+						setControlsHidden={setControlsHidden}
+						controlsHidden={controlsHidden}
+						currentTime={currentTime}
+						duration={duration}
+						formatTime={formatTime}
+						previousTrack={previousTrack}
+						togglePlayPause={togglePlayPause}
+						stopTrack={stopTrack}
+						nextTrack={nextTrack}
+						handleSeek={handleSeek}
+						handleVolumeChange={handleVolumeChange}
+						isPlaying={isPlaying}
+					/>
 				</div>
 			)}
 

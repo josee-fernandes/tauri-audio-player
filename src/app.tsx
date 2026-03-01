@@ -1,9 +1,9 @@
 import { Toaster } from 'sonner'
-import { TitleBar } from '@/components/window/title-bar'
-import { Home } from '@/pages/Home'
-import '@/styles/global.css'
+
 import { Preloader } from '@/components/preloader'
 import { ThemeProvider } from '@/components/theme-provider'
+import { TitleBar } from '@/components/window/title-bar'
+import { Home } from '@/pages/home'
 
 export function App() {
 	return (

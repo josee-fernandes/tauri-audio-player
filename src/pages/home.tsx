@@ -1,11 +1,9 @@
 import { AudioPlayer } from '@/components/audio-player'
 
-export const Home: React.FC = () => {
+export function Home() {
 	return (
 		<div className="h-full">
 			<AudioPlayer />
 		</div>
 	)
 }
-
-Home.displayName = 'Home'
