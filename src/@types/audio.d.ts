@@ -1,9 +1,10 @@
 export interface Directory {
 	name: string
 	path: string
-	isDirectory: boolean
-	isFile: boolean
-	isSymlink: boolean
+	isDirectory?: boolean
+	isFile?: boolean
+	isSymlink?: boolean
+	isDrive?: boolean
 }
 
 export interface AudioFile {

@@ -1,20 +1,24 @@
 import { useGSAP } from '@gsap/react'
-import { audioDir } from '@tauri-apps/api/path'
+import { invoke } from '@tauri-apps/api/core'
+import { audioDir, dirname } from '@tauri-apps/api/path'
 import { readDir, readFile } from '@tauri-apps/plugin-fs'
 import { gsap } from 'gsap'
 import Lenis from 'lenis'
 import { FolderOpen } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
 import type { AudioFile, Directory } from '@/@types/audio'
+import { EqModal } from '@/components/player/eq-modal'
+import { PlayerControls } from '@/components/player/player-controls'
+import { PlayerHeader } from '@/components/player/player-header'
 import { Button } from '@/components/ui/button'
 import { AUDIO_EXTENSIONS } from '@/constants/audio'
 import { useAudioEngine } from '@/hooks/use-audio-engine'
 import { cn } from '@/lib/utils'
 import { usePlayerStore } from '@/stores/player'
-import { EqModal } from './player/eq-modal'
-import { PlayerControls } from './player/player-controls'
-import { PlayerHeader } from './player/player-header'
+
+const isDriveRoot = (path: string) => /^[A-Z]:\\?$/i.test(path)
 
 export function AudioPlayer() {
 	// Audio element ref
@@ -48,8 +52,9 @@ export function AudioPlayer() {
 	const controlsHidden = usePlayerStore((state) => state.controlsHidden)
 	const toggleControlsHidden = usePlayerStore((state) => state.toggleControlsHidden)
 
+	const [displayPath, setDisplayPath] = useState(selectedFolder.split('/').pop() ?? 'Failed to load directory')
+
 	// Local state (not persisted)
-	const [defaultAudioDir, setDefaultAudioDir] = useState<string>('')
 	const [directories, setDirectories] = useState<Directory[]>([])
 	const [audioFiles, setAudioFiles] = useState<AudioFile[]>([])
 
@@ -84,31 +89,59 @@ export function AudioPlayer() {
 		}
 	}, [])
 
+	const loadDrives = useCallback(async () => {
+		const drives = await invoke<string[]>('get_drives')
+		const drivesDirectories = drives.map((drive) => ({
+			name: drive,
+			path: drive,
+			isDrive: true,
+		}))
+		setDirectories(drivesDirectories)
+		setAudioFiles([])
+		setDisplayPath('This PC')
+	}, [])
+
 	// Open a directory
 	const handleOpenDirectory = useCallback(
 		async (directoryPath: string) => {
+			console.log('directoryPath', directoryPath)
 			try {
 				await loadAudioFiles(directoryPath)
 				setSelectedFolder(directoryPath)
+				setDisplayPath(directoryPath.split('/').pop() ?? 'Failed to load directory')
 			} catch (error) {
 				toast.error('Open directory error', { description: error as string })
+
+				const parentPath = await dirname(directoryPath)
+
+				if (parentPath && parentPath !== directoryPath) {
+					await handleOpenDirectory(parentPath)
+					return
+				}
+
+				await loadDrives()
 			}
 		},
-		[loadAudioFiles, setSelectedFolder],
+		[loadAudioFiles, setSelectedFolder, loadDrives],
 	)
 
 	// Navigate to parent directory
-	const handleParentDirectory = useCallback(() => {
+	const handleParentDirectory = useCallback(async () => {
 		try {
-			const parentPath = selectedFolder.split('\\').slice(0, -1).join('\\')
+			if (isDriveRoot(selectedFolder)) {
+				await loadDrives()
+				return
+			}
 
-			if (parentPath) {
+			const parentPath = await dirname(selectedFolder)
+
+			if (parentPath && parentPath !== selectedFolder) {
 				void handleOpenDirectory(parentPath)
 			}
 		} catch (error) {
 			toast.error('Parent directory error', { description: error as string })
 		}
-	}, [selectedFolder, handleOpenDirectory])
+	}, [selectedFolder, handleOpenDirectory, loadDrives])
 
 	// Play a track using Blob URL (avoids CORS issues with MediaElementAudioSourceNode)
 	const playTrack = useCallback(
@@ -309,15 +342,13 @@ export function AudioPlayer() {
 		}
 	}, [selectedFolder, audioFiles.length, setScrollPercentage])
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: setDefaultAudioDir is stable from store
 	useEffect(() => {
 		audioDir().then((response) => {
-			setDefaultAudioDir(response)
 			// Use lastOpenedFolder if available, otherwise use default
 			const folderToOpen = lastOpenedFolder || response
 			void handleOpenDirectory(folderToOpen)
 		})
-	}, [lastOpenedFolder, handleOpenDirectory, setDefaultAudioDir])
+	}, [lastOpenedFolder, handleOpenDirectory])
 
 	// GSAP animation for controls height
 	useGSAP(
@@ -345,7 +376,7 @@ export function AudioPlayer() {
 
 	return (
 		<div className="flex flex-col h-full overflow-hidden">
-			<PlayerHeader selectedFolder={selectedFolder} view={view} setView={setView} scrollPercentage={scrollPercentage} />
+			<PlayerHeader displayPath={displayPath} view={view} setView={setView} scrollPercentage={scrollPercentage} />
 
 			{/* File List */}
 			<div ref={listWrapperRef} className="relative flex-1 min-h-0 p-4 overflow-hidden">
@@ -357,7 +388,8 @@ export function AudioPlayer() {
 							view === 'grid',
 					})}
 				>
-					{selectedFolder !== defaultAudioDir && (
+					{/* tratar para não mostrar se não tiver parent */}
+					{true && (
 						<Button variant="secondary" size="lg" className="flex justify-start" onClick={handleParentDirectory}>
 							<span>
 								<FolderOpen className="size-4" />

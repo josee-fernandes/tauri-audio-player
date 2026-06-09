@@ -1,21 +1,19 @@
 import { LayoutGrid, LayoutList } from 'lucide-react'
-
+import { memo } from 'react'
 import { Button } from '@/components/ui/button'
 
 interface PlayerHeaderProps {
-	selectedFolder: string
+	displayPath: string
 	view: 'list' | 'grid'
 	setView: (view: 'list' | 'grid') => void
 	scrollPercentage: number
 }
 
-export function PlayerHeader({ selectedFolder, view, setView, scrollPercentage }: PlayerHeaderProps) {
+export const PlayerHeader = memo(({ displayPath, view, setView, scrollPercentage }: PlayerHeaderProps) => {
 	return (
 		<header className="p-4 border-b flex justify-between items-end">
 			<div className="flex flex-col justify-center gap-2">
-				{selectedFolder && (
-					<p className="mt-2 text-sm text-muted-foreground">Pasta atual: {selectedFolder.split('/').pop()}</p>
-				)}
+				{displayPath && <p className="mt-2 text-sm text-muted-foreground">Pasta atual: {displayPath}</p>}
 				<div className="flex items-center gap-2">
 					<Button variant={view === 'list' ? 'default' : 'outline'} onClick={() => setView('list')}>
 						<LayoutList className="size-4" />
@@ -36,4 +34,4 @@ export function PlayerHeader({ selectedFolder, view, setView, scrollPercentage }
 			</div>
 		</header>
 	)
-}
+})
